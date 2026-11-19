@@ -176,6 +176,10 @@ details.more>summary::-webkit-details-marker{display:none}
  .modal{align-items:flex-end;padding:0}.modal .card{border-radius:22px 22px 0 0;max-height:92vh;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
 }
 @media (min-width:761px) and (max-width:1100px){ .sync,.logo small{display:none} nav a{padding:7px 10px} .hwrap{gap:8px} main{padding:16px 18px 60px} .drama{grid-template-columns:1fr} .side .slist{max-height:55vh} }
+
+@media (hover:hover){ .sitem:hover .acts{display:flex} }
+.sedit textarea{min-height:56px;font-size:17px}
+.sitem .zz{cursor:text}
 </style></head><body>
 <header><div class="hwrap"><div class="logo"><span class="peach">🍑</span><div>IuTiengTrung<small>爱学中文 · HSK5→6</small></div></div><nav id="nav"></nav><span class="sync" id="sync"></span></div></header>
 <main id="main"></main><div id="toast"></div><div class="deco">🌸</div>
@@ -1509,9 +1513,9 @@ function clipStatus(c) {
 async function aiFixClip(c, onProg) {
   let n = 0;
   for (let i = 0; i < c.sents.length; i += 40) {
-    const ch = c.sents.slice(i, i + 40); onProg && onProg(i, c.sents.length);
+    const ch = c.sents.slice(i, i + 40); const before = ch.map(x => x.zh); onProg && onProg(i, c.sents.length);
     const r = await ai(`Đây là phụ đề do máy nhận dạng giọng nói từ một phim truyền hình Trung Quốc, có thể sai chữ đồng âm, thiếu dấu câu, lẫn phồn thể. Hãy sửa thành tiếng Trung giản thể đúng, tự nhiên, thêm dấu câu phù hợp, dựa vào ngữ cảnh các câu liền nhau. Không gộp hay tách câu. Trả JSON array đúng ${ch.length} chuỗi theo thứ tự.\n${JSON.stringify(ch.map(s => s.zh))}`, { json: true, tier: 'quick' });
-    if (Array.isArray(r)) r.forEach((v, k) => { if (ch[k] && typeof v === 'string' && v.trim() && v.trim() !== ch[k].zh) { ch[k].zh = v.trim(); n++; } });
+    if (Array.isArray(r)) r.forEach((v, k) => { if (ch[k] && !ch[k].edited && ch[k].zh === before[k] && Drama.editing !== c.sents.indexOf(ch[k]) && typeof v === 'string' && v.trim() && v.trim() !== ch[k].zh) { ch[k].zh = v.trim(); n++; } });
     saveClip(c); if (Drama.clip === c) renderSents();
   }
   return n;
@@ -1541,7 +1545,8 @@ function parseSubs(text) {
 const Drama = {
   clip: null, video: null, url: null, idx: -1, mode: 'watch', raf: 0, speed: 1, cover: false, coverH: 22, showZh: true, showPy: false, showTr: true, mark: null, syncI: 0, waiting: false,
   teardown() { if (this.raf) cancelAnimationFrame(this.raf); this.raf = 0; if (this.video) { try { this.video.pause(); } catch (e) {} } },
-  release() { this.teardown(); if (this.url) URL.revokeObjectURL(this.url); this.url = null; this.video = null; this.clip = null; this.idx = -1; this.waiting = false; },
+  editing: null, draft: null,
+  release() { this.editing = null; this.draft = null; this.teardown(); if (this.url) URL.revokeObjectURL(this.url); this.url = null; this.video = null; this.clip = null; this.idx = -1; this.waiting = false; },
   save() { if (this.clip) saveClip(this.clip); }
 };
 function thumbOf(blob) {
@@ -1673,10 +1678,22 @@ function renderSents() {
   const list = c.sents.map((s, i) => [s, i]).filter(([s]) => !q || s.zh.includes(q) || (s.vi || '').toLowerCase().includes(q.toLowerCase()) || toneless(py(s.zh)).includes(toneless(q)));
   const st = ASR.state[c.id];
   el.innerHTML = list.length ? list.map(([s, i]) => `<div class="sitem ${i === Drama.idx ? 'on' : ''} ${Drama.mode === 'sync' && i === Drama.syncI ? 'on' : ''}" data-act="seek" data-i="${i}" id="si-${i}">
-    <div class="tm">${s.s != null ? fmt(s.s) : '—'}</div><div class="sp"><div class="zz">${esc(s.zh)} ${s.star ? '⭐' : ''}</div>${s.vi || s.tr ? `<div class="vv">${esc(s.vi || s.tr)}</div>` : ''}
+    <div class="tm">${s.s != null ? fmt(s.s) : '—'}</div><div class="sp">${Drama.editing === i ? `<div class="sedit"><textarea id="sedit" rows="2" class="zh">${esc(Drama.draft ?? s.zh)}</textarea><div class="row" style="margin-top:6px"><button class="btn sm" data-act="saveSent" data-i="${i}">💾 Lưu</button><button class="btn sm ghost" data-act="cancelSent">Huỷ</button><span class="tiny muted">Enter để lưu · Esc để huỷ</span></div></div>` : `<div class="zz" data-act="editSentDbl" data-i="${i}">${esc(s.zh)} ${s.star ? '⭐' : ''}${s.edited ? ' <span class="tiny muted">✏️</span>' : ''}</div>`}${s.vi || s.tr ? `<div class="vv">${esc(s.vi || s.tr)}</div>` : ''}
     <div class="acts"><button class="btn icon sm ghost" data-act="say" data-t="${esc(s.zh)}" title="Giọng đọc mẫu">🔊</button><button class="btn icon sm ghost" data-act="starSent" data-i="${i}" title="Lưu vào Luyện nói">⭐</button><button class="btn sm ai" data-act="explain" data-i="${i}">✨ Giải thích</button><button class="btn icon sm ghost" data-act="editSent" data-i="${i}" title="Sửa">✏️</button><button class="btn icon sm ghost" data-act="delSent" data-i="${i}" title="Xoá">🗑</button>${c.yt ? `<a class="btn icon sm ghost" href="${esc(ytLink(c, s.s))}" target="_blank" rel="noopener">▶️</a>` : ''}</div>
     ${s.ex ? `<div class="aiout small">${s.ex}</div>` : ''}</div></div>`).join('') : `<div class="empty small">${st && st.running ? '🤖 AI đang nghe video, phụ đề sẽ hiện dần ở đây…' : 'Chưa có lời thoại.'}</div>`;
+  const ta = $('#sedit');
+  if (ta) {
+    ta.addEventListener('input', () => { Drama.draft = ta.value; });
+    ta.addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); saveSentEdit(Drama.editing); } else if (ev.key === 'Escape') { Drama.editing = null; Drama.draft = null; renderSents(); } });
+    if (document.activeElement !== ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  }
   const hb = document.querySelector('.side b'); if (hb) hb.textContent = `Lời thoại · ${c.sents.length} câu`;
+}
+function saveSentEdit(i) {
+  const c = Drama.clip, s = c && c.sents[i], ta = $('#sedit'); if (!s) return;
+  const v = (ta ? ta.value : Drama.draft || '').replace(/\s*\n\s*/g, ' ').trim();
+  if (v && v !== s.zh) { s.zh = v; s.edited = true; s.ex = ''; if (s.vi) s.vi = ''; Drama.save(); toast('Đã lưu câu thoại ✔️'); }
+  Drama.editing = null; Drama.draft = null; renderSents(); renderSub();
 }
 function setIdx(i, scroll = true) {
   if (i === Drama.idx) return; Drama.idx = i; renderSub();
@@ -1741,14 +1758,20 @@ async function dramaAct(a, d, el, e) {
     }
     case 'aiFix': await busy(el, async () => { if (!c.sents.length) { toast('Chưa có phụ đề'); return; } const n = await aiFixClip(c, (i, t) => { el.innerHTML = `<span class="spin"></span> ${i}/${t}`; }); renderSub(); toast(`Đã sửa ${n} câu ✨`); }); break;
     case 'dmode': Drama.mode = d.v; Drama.waiting = false; Drama.mark = null; if (d.v === 'sync') Drama.syncI = Math.max(0, c.sents.findIndex(s => s.s == null)); renderCtrl(); renderSents(); { const sr = $('#shadowRes'); if (sr) sr.innerHTML = ''; } if (d.v === 'ocr' || d.v === 'sync') { const det = el.closest('details'); if (det) det.open = false; $('#ctrl').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } break;
-    case 'seek': if (e.target.closest('button,a')) break; playSent(+d.i); break;
+    case 'seek': if (e.target.closest('button,a,textarea,.sedit')) break; playSent(+d.i); break;
     case 'dplay': if (Drama.video && Drama.mode === 'shadow' && Drama.waiting) playSent(Math.min(c.sents.length - 1, Drama.idx + 1)); else if (Drama.video) { Drama.waiting = false; Drama.video.paused ? Drama.video.play().catch(() => {}) : Drama.video.pause(); } else if (curSent()) speak(curSent().zh, Drama.speed); else playSent(0); break;
     case 'dprev': playSent(Math.max(0, Drama.idx - 1)); break;
     case 'dnext': playSent(Math.min(c.sents.length - 1, Drama.idx + 1)); break;
     case 'dreplay': playSent(Math.max(0, Drama.idx)); break;
     case 'starSent': { const s = c.sents[+d.i]; s.star = !s.star; Drama.save(); if (s.star) { const p = { id: uid(), zh: s.zh, vi: s.vi || s.tr || '', src: 'phim', from: c.title, at: Date.now() }; S.phrases[p.id] = p; Store.put('phrases', p); toast('Đã lưu vào ⭐ Câu của tôi (Luyện nói)'); } renderSents(); break; }
     case 'explain': await busy(el, async () => { const s = c.sents[+d.i]; const ctx = c.sents.slice(Math.max(0, +d.i - 2), +d.i + 3).map(x => x.zh).join(' / '); const r = await ai(`Câu thoại trong phim Trung Quốc: "${s.zh}" (ngữ cảnh: ${ctx}). Giải thích cho học viên HSK5. Trả JSON {"vi":"dịch tự nhiên","note":"sắc thái, khẩu ngữ, ngữ pháp đáng chú ý (tiếng Việt, tối đa 3 câu)","words":[{"h":"","p":"","m":""}] (tối đa 5 từ đáng học)}`, { json: true }); s.vi = s.vi || r.vi; s.ex = `<div>${esc(r.vi)}</div><div style="margin:4px 0">${esc(r.note)}</div>` + (r.words || []).map(w => `<span class="row" style="gap:6px;margin:2px 0"><b class="zh">${esc(w.h)}</b> <span style="color:var(--pink2)">${esc(w.p)}</span> ${esc(w.m)} ${S.words[wid(w.h)] ? '<span class="tag m">đã có</span>' : `<button class="btn icon sm" data-act="addAiWord" data-src="phim" data-w="${esc(JSON.stringify({ ...w, lv: 'MOI', ex: s.zh, exvi: r.vi }))}">➕</button>`}</span>`).join(''); Drama.save(); renderSents(); renderSub(); }); break;
-    case 'editSent': { const s = c.sents[+d.i]; const v = await promptBox('Sửa câu thoại', s.zh); if (v != null && v.trim()) { s.zh = v.trim(); Drama.save(); renderSents(); renderSub(); } break; }
+    case 'editSent': case 'editSentDbl': {
+      if (a === 'editSentDbl' && e.detail < 2) { if (!e.target.closest('.sitem.on')) playSent(+d.i); break; }
+      if (Drama.video) { Drama.video.pause(); Drama.waiting = false; }
+      Drama.editing = +d.i; Drama.draft = null; renderSents(); break;
+    }
+    case 'saveSent': saveSentEdit(+d.i); break;
+    case 'cancelSent': Drama.editing = null; Drama.draft = null; renderSents(); break;
     case 'delSent': { c.sents.splice(+d.i, 1); if (Drama.idx >= c.sents.length) Drama.idx = -1; Drama.save(); renderSents(); break; }
     case 'transAll': await busy(el, async () => { const todo = c.sents.filter(s => !s.vi); if (!todo.length) { toast('Đã dịch hết rồi'); return; } for (let i = 0; i < todo.length; i += 40) { const ch = todo.slice(i, i + 40); el.innerHTML = `<span class="spin"></span> ${i}/${todo.length}`; const r = await ai(`Dịch các câu thoại phim Trung Quốc sau sang tiếng Việt tự nhiên, đúng văn phong phim. Trả JSON array đúng ${ch.length} chuỗi theo thứ tự.\n${JSON.stringify(ch.map(s => s.zh))}`, { json: true }); r.forEach((v, k) => { if (ch[k]) ch[k].vi = v; }); renderSents(); } Drama.save(); renderSub(); toast('Đã dịch xong 🎉'); }); break;
     case 'toSimp': await busy(el, async () => { if (!window.OpenCC) await loadScript(LIB_OPENCC); const cv = OpenCC.Converter({ from: 'tw', to: 'cn' }); c.sents.forEach(s => s.zh = cv(s.zh)); Drama.save(); renderSents(); renderSub(); toast('Đã chuyển sang giản thể'); }); break;
