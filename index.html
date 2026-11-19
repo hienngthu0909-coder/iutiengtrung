@@ -1433,7 +1433,7 @@ const ASR = {
   bad(t) { return !t || ![...t].some(isCJK) || /字幕|订阅|点赞|打赏|谢谢观看|感谢观看|Amara|明镜|请不吝|中文字幕|字幕组/.test(t) || /(.)\1{7,}/.test(t); },
   split(s, e, text) { // chia đoạn dài theo dấu câu
     text = text.trim();
-    const parts = text.split(/(?<=[，。！？!?；,])/).map(x => x.trim()).filter(Boolean);
+    const parts = (text.match(/[^，。！？!?；,]+[，。！？!?；,]*/g) || []).map(x => x.trim()).filter(Boolean);
     if (cjkCount(text) <= 18 || parts.length < 2) return [{ s, e, zh: text }];
     const groups = []; let cur = '';
     parts.forEach(p => { if (cjkCount(cur + p) > 16 && cur) { groups.push(cur); cur = p; } else cur += p; }); if (cur) groups.push(cur);
