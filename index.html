@@ -180,6 +180,13 @@ details.more>summary::-webkit-details-marker{display:none}
 @media (hover:hover){ .sitem:hover .acts{display:flex} }
 .sedit textarea{min-height:56px;font-size:17px}
 .sitem .zz{cursor:text}
+
+.sub .w{cursor:pointer;border-radius:6px;padding:0 1px;transition:background .1s}
+.sub .w:hover{background:var(--pinkS)}
+.sub .w.saved{border-bottom:2px solid var(--pink)}
+.sub .z{user-select:text;-webkit-user-select:text}
+
+.sub a{color:var(--pink2)}
 </style></head><body>
 <header><div class="hwrap"><div class="logo"><span class="peach">🍑</span><div>IuTiengTrung<small>爱学中文 · HSK5→6</small></div></div><nav id="nav"></nav><span class="sync" id="sync"></span></div></header>
 <main id="main"></main><div id="toast"></div><div class="deco">🌸</div>
@@ -576,7 +583,7 @@ topic: [
 
 // ====== TIỂU ĐÀO · App ======
 const $ = s => document.querySelector(s);
-const APP_VERSION = '1.5';
+const APP_VERSION = '1.6';
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
 const STANDALONE = !!window.TIEUDAO_STANDALONE;
 const LIB_OPENCC = window.TIEUDAO_OPENCC || 'https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/t2cn.js';
@@ -981,7 +988,7 @@ function vList(b) {
    <select id="vfilter">${[['all','Tất cả từ đang học'],['due','Cần ôn'],['HSK5','HSK5'],['HSK6','HSK6'],['PHIM','Từ phim (bộ có sẵn)'],['phim','Lưu từ phim của tôi'],['bai-khoa','Từ bài khoá'],['tu-them','Tự thêm'],['starter','📦 Bộ khởi đầu chưa học']].map(([k, n]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${n}</option>`).join('')}</select>
    <span class="sp"></span><span class="small muted">${total} từ</span></div>
    ${total ? `<div class="tbl"><table style="margin-top:10px"><tr><th>Từ</th><th>Pinyin</th><th>Nghĩa</th><th>Nhóm</th><th></th></tr>
-   ${rows.map(w => `<tr><td class="zh" style="font-size:18px">${esc(w.h)}</td><td style="color:var(--pink2)">${esc(w.p)}</td><td>${esc(w.m)}${w.ex ? `<div class="tiny muted zh">${esc(w.ex)}</div>` : ''}</td><td><span class="tag">${esc(LV_NAME[w.lv] || w.lv)}</span>${w._starter ? '' : `<div class="tiny muted">${w.due <= Date.now() ? 'cần ôn' : 'ôn sau ' + Math.ceil((w.due - Date.now()) / DAY) + 'd'}</div>`}</td>
+   ${rows.map(w => `<tr><td class="zh" style="font-size:18px">${esc(w.h)}</td><td style="color:var(--pink2)">${esc(w.p)}</td><td>${esc(w.m)}${w.ex ? `<div class="tiny muted zh">${esc(w.ex)}</div>` : ''}${w.clipTitle ? `<div class="tiny muted">🎬 ${esc(w.clipTitle)}</div>` : ''}</td><td><span class="tag">${esc(LV_NAME[w.lv] || w.lv)}</span>${w._starter ? '' : `<div class="tiny muted">${w.due <= Date.now() ? 'cần ôn' : 'ôn sau ' + Math.ceil((w.due - Date.now()) / DAY) + 'd'}</div>`}</td>
    <td style="white-space:nowrap"><button class="btn icon ghost sm" data-act="say" data-t="${esc(w.h)}">🔊</button>${w._starter ? `<button class="btn icon sm" data-act="addStarter" data-h="${esc(w.h)}">➕</button>` : `<button class="btn icon ghost sm" data-act="delWord" data-id="${w.id}">🗑</button>`}</td></tr>`).join('')}</table></div>` : `<div class="empty"><div class="e">🌱</div>Chưa có từ nào ở đây.</div>`}
    ${total > 300 ? '<div class="tiny muted">Đang hiện 300 từ đầu, hãy tìm kiếm để lọc.</div>' : ''}</div>`;
 }
@@ -1677,8 +1684,70 @@ function renderSub() {
   const s = curSent(), D = Drama, el = $('#subbox'); if (!el) return;
   el.className = 'sub' + (D.showZh ? '' : ' hidezh');
   if (!s) { el.innerHTML = '<span class="muted small">Phụ đề hiện ở đây</span>'; return; }
-  el.innerHTML = `<div class="z">${D.showPy ? ruby(s.zh) : esc(s.zh)}</div>${D.showTr && (s.vi || s.tr) ? `<div class="t">${esc(s.vi || s.tr)}</div>` : ''}`;
+  const z = segWords(s.zh).map(w => [...w].some(isCJK) ? `<span class="w ${S.words[wid(w)] ? 'saved' : ''}" data-act="pickWord" data-w="${esc(w)}" title="Bấm để lưu từ">${D.showPy ? ruby(w) : esc(w)}</span>` : esc(w)).join('');
+  const n = Object.values(S.words).filter(w => w.clip === Drama.clip.id).length;
+  el.innerHTML = `<div class="z">${z}</div>${D.showTr && (s.vi || s.tr) ? `<div class="t">${esc(s.vi || s.tr)}</div>` : ''}<div class="tiny muted" style="margin-top:4px">👆 Bấm vào một từ (hoặc bôi đen chữ) để lưu từ mới${n ? ` · <a href="#vocab" data-act="seeClipWords">📚 Đã lưu ${n} từ từ phim này</a>` : ''}</div>`;
 }
+function segWords(t) {
+  try { const seg = new Intl.Segmenter('zh', { granularity: 'word' }); return [...seg.segment(t)].map(x => x.segment); } catch (e) { return [...t]; }
+}
+function localMeaning(h) {
+  const w = S.words[wid(h)]; if (w) return { p: w.p, m: w.m, hv: w.hv, saved: true };
+  const st = STARTER.find(x => x.h === h); if (st) return { p: st.p, m: st.m };
+  return null;
+}
+async function wordForm(h, sent) {
+  if (Drama.video && !Drama.video.paused) Drama.video.pause();
+  h = (h || '').replace(/[^\u3400-\u9fff\uf900-\ufaff]/g, '').slice(0, 12); if (!h) return;
+  const loc = localMeaning(h);
+  const ex = sent ? sent.zh : '', exvi = sent ? (sent.vi || sent.tr || '') : '';
+  const m = openModal(`<div class="row"><h2 class="sp">➕ Lưu từ mới</h2><button class="btn icon ghost" data-act="modalClose">✕</button></div>
+   ${loc && loc.saved ? '<div class="tip" style="margin-bottom:8px">✅ Từ này đã có trong sổ từ của bạn.</div>' : ''}
+   <div class="row"><input type="text" id="wf_h" class="zh" value="${esc(h)}" style="flex:1;font-size:26px;font-weight:700"><button class="btn icon ghost" id="wf_say">🔊</button></div>
+   <div class="tiny muted" style="margin-top:4px">Có thể thêm / bớt chữ cho đúng từ bạn muốn lưu.</div>
+   <label class="f">Pinyin</label><input type="text" id="wf_p" value="${esc(loc ? loc.p : py(h))}">
+   <label class="f">Nghĩa tiếng Việt</label><div class="row"><input type="text" id="wf_m" value="${esc(loc ? loc.m : '')}" placeholder="${STANDALONE ? 'Nhập nghĩa của từ…' : 'Đang tra nghĩa…'}" style="flex:1"><button class="btn sm ai" id="wf_ai">✨ Tra nghĩa</button></div>
+   <label class="f">Hán Việt</label><input type="text" id="wf_hv" value="${esc(loc && loc.hv || '')}">
+   <label class="f">Câu trong phim</label><div class="zh" style="font-size:17px">${esc(ex)}</div><div class="small muted">${esc(exvi)}</div>
+   <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-act="modalClose">Huỷ</button><button class="btn" id="wf_save">💾 Lưu vào sổ từ</button></div>`);
+  const $m = q => m.querySelector(q);
+  let pTouched = false;
+  $m('#wf_p').addEventListener('input', () => { pTouched = true; });
+  $m('#wf_h').addEventListener('input', () => { if (!pTouched) $m('#wf_p').value = py($m('#wf_h').value); const l = localMeaning($m('#wf_h').value.trim()); if (l) { $m('#wf_m').value = l.m || ''; $m('#wf_p').value = l.p || $m('#wf_p').value; } });
+  $m('#wf_say').onclick = () => speak($m('#wf_h').value.trim());
+  const lookup = async () => {
+    const hh = $m('#wf_h').value.trim(); if (!hh) return;
+    const r = await ai(`Từ tiếng Trung "${hh}" xuất hiện trong câu thoại phim: "${ex}". Cho biết nghĩa của từ ĐÚNG THEO NGỮ CẢNH câu này. Trả JSON {"p":"pinyin có dấu thanh, đúng cách đọc trong câu","m":"nghĩa tiếng Việt ngắn gọn","hv":"âm Hán Việt"}`, { json: true, tier: 'quick' });
+    if (!m.isConnected) return;
+    if (r.p) $m('#wf_p').value = r.p; if (r.m) $m('#wf_m').value = r.m; if (r.hv && !$m('#wf_hv').value) $m('#wf_hv').value = r.hv;
+  };
+  $m('#wf_ai').onclick = () => busy($m('#wf_ai'), lookup);
+  $m('#wf_save').onclick = () => {
+    const w = { h: $m('#wf_h').value.trim(), p: $m('#wf_p').value.trim(), m: $m('#wf_m').value.trim(), hv: $m('#wf_hv').value.trim(), ex, exvi, lv: 'PHIM' };
+    if (!w.h) { toast('Nhập chữ Hán'); return; }
+    const cur = S.words[wid(w.h)];
+    if (cur) { Object.assign(cur, { p: w.p || cur.p, m: w.m || cur.m, hv: w.hv || cur.hv, ex: cur.ex || ex, exvi: cur.exvi || exvi }); Store.put('words', cur); toast('Đã cập nhật «' + w.h + '» trong sổ từ'); }
+    else { addWord(w, 'phim'); const nw = S.words[wid(w.h)]; if (nw && Drama.clip) { nw.clip = Drama.clip.id; nw.clipTitle = Drama.clip.title; Store.put('words', nw); } toast('Đã lưu «' + w.h + '» 🌸 – sẽ có trong phần ôn thẻ'); }
+    closeModal(); renderSub();
+  };
+  if (!loc && !STANDALONE && window.claude) { $m('#wf_m').placeholder = 'Đang tra nghĩa…'; lookup().catch(() => { if (m.isConnected) $m('#wf_m').placeholder = 'Nhập nghĩa của từ…'; }); }
+  else if (!loc) $m('#wf_m').focus();
+}
+// bôi đen chữ trong phụ đề / danh sách câu → nút lưu từ
+function selWordBtn() {
+  let b = document.getElementById('selbtn');
+  const sel = window.getSelection(); const txt = sel ? sel.toString().trim() : '';
+  const inSub = sel && sel.rangeCount && (sel.anchorNode && sel.anchorNode.parentElement && sel.anchorNode.parentElement.closest('#subbox, .slist .zz'));
+  if (!inSub || !txt || cjkCount(txt) === 0 || txt.length > 14) { if (b) b.remove(); return; }
+  const r = sel.getRangeAt(0).getBoundingClientRect();
+  if (!b) { b = document.createElement('button'); b.id = 'selbtn'; b.className = 'btn sm'; b.textContent = '➕ Lưu từ'; document.body.appendChild(b); }
+  b.style.cssText = `position:fixed;z-index:45;left:${Math.max(8, r.left + r.width / 2 - 45)}px;top:${Math.max(8, r.top - 44)}px`;
+  b.onmousedown = ev => ev.preventDefault();
+  b.onclick = () => { const row = inSub.closest('.sitem'); const sent = row ? Drama.clip.sents[+row.dataset.i] : curSent(); b.remove(); sel.removeAllRanges(); wordForm(txt, sent); };
+}
+document.addEventListener('mouseup', () => setTimeout(selWordBtn, 10));
+document.addEventListener('touchend', () => setTimeout(selWordBtn, 300));
+document.addEventListener('selectionchange', () => { const b = document.getElementById('selbtn'); const t = (window.getSelection() || '').toString().trim(); if (b && !t) b.remove(); });
 function renderSents() {
   const c = Drama.clip, el = $('#slist'); if (!el) return;
   const q = ($('#sfind') || {}).value || '';
@@ -1778,6 +1847,8 @@ async function dramaAct(a, d, el, e) {
       Drama.editing = +d.i; Drama.draft = null; renderSents(); break;
     }
     case 'saveSent': saveSentEdit(+d.i); break;
+    case 'pickWord': { const sel = (window.getSelection() || '').toString().trim(); if (sel && cjkCount(sel) > 0) break; wordForm(d.w, curSent()); break; }
+    case 'seeClipWords': S.ui.vtab = 'list'; S.ui.vfilter = 'phim'; S.ui.vq = ''; break;
     case 'cancelSent': Drama.editing = null; Drama.draft = null; renderSents(); break;
     case 'delSent': { c.sents.splice(+d.i, 1); if (Drama.idx >= c.sents.length) Drama.idx = -1; Drama.save(); renderSents(); break; }
     case 'transAll': await busy(el, async () => { const todo = c.sents.filter(s => !s.vi); if (!todo.length) { toast('Đã dịch hết rồi'); return; } for (let i = 0; i < todo.length; i += 40) { const ch = todo.slice(i, i + 40); el.innerHTML = `<span class="spin"></span> ${i}/${todo.length}`; const r = await ai(`Dịch các câu thoại phim Trung Quốc sau sang tiếng Việt tự nhiên, đúng văn phong phim. Trả JSON array đúng ${ch.length} chuỗi theo thứ tự.\n${JSON.stringify(ch.map(s => s.zh))}`, { json: true }); r.forEach((v, k) => { if (ch[k]) ch[k].vi = v; }); renderSents(); } Drama.save(); renderSub(); toast('Đã dịch xong 🎉'); }); break;
