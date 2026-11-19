@@ -576,6 +576,7 @@ topic: [
 
 // ====== TIỂU ĐÀO · App ======
 const $ = s => document.querySelector(s);
+const APP_VERSION = '1.5';
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
 const STANDALONE = !!window.TIEUDAO_STANDALONE;
 const LIB_OPENCC = window.TIEUDAO_OPENCC || 'https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/t2cn.js';
@@ -767,7 +768,7 @@ const Store = {
   cloud: false, db: null, uid: null, q: Promise.resolve(),
   key: c => 'tieudao_' + c,
   lget(c) { try { return JSON.parse(localStorage.getItem(this.key(c)) || '{}'); } catch (e) { return {}; } },
-  lset(c, o) { try { localStorage.setItem(this.key(c), JSON.stringify(o)); } catch (e) { toast('Bộ nhớ trình duyệt đầy hoặc bị chặn.'); } },
+  lset(c, o) { try { localStorage.setItem(this.key(c), JSON.stringify(o)); } catch (e) { if (!this.cloud) toast('Bộ nhớ trình duyệt đầy hoặc bị chặn.'); } },
   async init() {
     if (!window.claude || !claude.use) return;
     try {
@@ -789,13 +790,14 @@ const Store = {
     return out;
   },
   put(c, obj) {
+    obj.upd = Date.now();
     const o = JSON.parse(JSON.stringify(obj)); o.k = o.id;
+    { const m = this.lget(c); m[o.id] = o; this.lset(c, m); } // luôn lưu bản sao trên máy
     if (this.cloud) this.q = this.q.then(() => this.base().collection(c).doc(o.id).set(o)).catch(e => this.err(e));
-    else { const m = this.lget(c); m[o.id] = o; this.lset(c, m); }
   },
   del(c, id) {
     if (this.cloud) this.q = this.q.then(() => this.base().collection(c).doc(id).delete()).catch(e => this.err(e));
-    else { const m = this.lget(c); delete m[id]; this.lset(c, m); }
+    { const m = this.lget(c); delete m[id]; this.lset(c, m); }
   },
   async getProfile() {
     if (!this.cloud) { const p = this.lget('profile'); return p && p.days ? p : null; }
@@ -806,7 +808,7 @@ const Store = {
     if (this.cloud) this.q = this.q.then(() => this.db.doc('data/users/' + this.uid + '/profile').set(o)).catch(e => this.err(e));
     else this.lset('profile', o);
   },
-  err(e) { console.warn(e); if (e && e.code === 'quota_exceeded') toast('Kho lưu trữ đã đầy, hãy xoá bớt dữ liệu cũ.', 5000); else if (e && e.code === 'unavailable') toast('Mất kết nối lưu trữ, thử lại sau.'); }
+  err(e) { console.warn(e); const code = (e && (e.code || e.message)) || 'không rõ'; if (code === 'quota_exceeded') toast('Kho lưu trữ tài khoản đã đầy, hãy xoá bớt dữ liệu cũ. Thay đổi vẫn được lưu tạm trên máy này.', 6000); else toast('Chưa lưu được lên tài khoản (' + code + '). Thay đổi vẫn được lưu trên máy này.', 6000); }
 };
 
 // ---------- Trạng thái ----------
@@ -836,10 +838,15 @@ async function loadAll() {
   try {
     const [w, l, c, ph, p] = await Promise.all([Store.all('words'), Store.all('lessons'), Store.all('clips'), Store.all('phrases'), Store.getProfile()]);
     w.forEach(x => S.words[x.id] = x); l.forEach(x => S.lessons[x.id] = x); c.forEach(x => S.clips[x.id] = x); ph.forEach(x => S.phrases[x.id] = x);
+    if (Store.cloud) { // gộp bản lưu trên máy nếu mới hơn bản trên tài khoản
+      [['words', S.words], ['lessons', S.lessons], ['clips', S.clips], ['phrases', S.phrases]].forEach(([name, map]) => {
+        Object.values(Store.lget(name)).forEach(x => { const cur = map[x.id]; if (!cur || (x.upd || 0) > (cur.upd || 0)) { map[x.id] = x; Store.put(name, x); } });
+      });
+    }
     if (p) { S.profile = Object.assign({ days: {}, settings: {} }, p); S.profile.days = S.profile.days || {}; S.profile.settings = S.profile.settings || {}; }
   } catch (e) { console.warn(e); toast('Không tải được dữ liệu đã lưu.'); }
   S.loaded = true;
-  $('#sync').textContent = Store.cloud ? '☁️ Đã đồng bộ tài khoản' : '💾 Lưu trên trình duyệt này';
+  $('#sync').textContent = (Store.cloud ? '☁️ Đã đồng bộ tài khoản' : '💾 Lưu trên trình duyệt này') + ' · v' + APP_VERSION;
   render();
 }
 
